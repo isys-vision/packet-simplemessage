@@ -68,6 +68,14 @@ do
 	local MSG_MIKADO_JOINT_TRAJ_PT_FULL  = 0xFDEA
 	local MSG_MIKADO_TRAJECTORY          = 0xFDEB
 	local MSG_MIKADO_ROBOT_MODEL_INFO    = 0xFDED
+	local MSG_MIKADO_ROBOT_STATUS        = 0xFDEF
+	local MSG_MIKADO_SIMPLE_ACTION_REPLY = 0xFE4C
+	local MSG_MIKADO_STATUS_ACTION_REPLY = 0xFE4D
+	local MSG_MIKADO_POSE_ACTION_REPLY   = 0xFE4E
+	local MSG_MIKADO_CONNECTION_INFO     = 0xFDF0
+	local MSG_MIKADO_DYNAMIC_JOINTS      = 0xFDF1
+	local MSG_MIKADO_DYNAMIC_JOINTS_TRAJ_PT = 0xFDF2
+
 
 	local COMM_INVALID                   = 0x00
 	local COMM_TOPIC                     = 0x01
@@ -250,6 +258,13 @@ do
 		[MSG_MIKADO_JOINT_TRAJ_PT_FULL] = "Mikado Joint Trajectory Full Point",
 		[MSG_MIKADO_TRAJECTORY        ] = "Mikado Trajectory",
 		[MSG_MIKADO_ROBOT_MODEL_INFO  ] = "Mikado Robot Model Info",
+		[MSG_MIKADO_ROBOT_STATUS  	  ] = "Mikado Robot Status",
+		[MSG_MIKADO_SIMPLE_ACTION_REPLY] = "Mikado Simple Action Reply",
+		[MSG_MIKADO_STATUS_ACTION_REPLY] = "Mikado Status Action Reply",
+		[MSG_MIKADO_POSE_ACTION_REPLY] = "Mikado Pose Action Reply",
+		[MSG_MIKADO_CONNECTION_INFO]     = "Mikado Connection Info",
+		[MSG_MIKADO_DYNAMIC_JOINTS]    = "Mikado Dynamic Joints",
+		[MSG_MIKADO_DYNAMIC_JOINTS_TRAJ_PT] = "Mikado Dynamic Joints Trajectory Point"
 	}
 
 	local comm_types_str = {
@@ -295,6 +310,11 @@ do
 		[STATUS_TRISTATE_UNKNOWN] = "Unknown",
 		[STATUS_TRISTATE_FALSE  ] = "False",
 		[STATUS_TRISTATE_TRUE   ] = "True"
+	}
+
+	local true_false_str = {
+		[0] = "False",
+		[1] = "True"
 	}
 
 
@@ -393,7 +413,7 @@ do
 	p_simplemsg_tcp.prefs["target_be"]              = Pref.bool("Target is big-endian"  , true, "Is the target using big-endian transfers?")
 	p_simplemsg_tcp.prefs["autodetect_endianness"]  = Pref.bool("Auto-detect endianness", true, "Should endianness of data be auto-detected?")
 	p_simplemsg_tcp.prefs["display_invalid_fields"] = Pref.bool("Show invalid fields"   , true, "Should values for invalid fields be displayed (in messages with a 'valid fields' field)?")
-	p_simplemsg_tcp.prefs["tcp_ports"             ] = Pref.range("TCP Ports", "11000,11002,50240,50241,50242", "TCP ports the dissector should be registered for (default: 11000 (traj. relay), 11002 (state), 50240 (MotoROS traj. relay), 50241 (MotorROS state) and 50242 (MotorROS IO)).", 65535)
+	p_simplemsg_tcp.prefs["tcp_ports"             ] = Pref.range("TCP Ports", "11000,11002,50240,50241,50242,54603", "TCP ports the dissector should be registered for (default: 11000 (traj. relay), 11002 (state), 50240 (MotoROS traj. relay), 50241 (MotorROS state) and 50242 (MotorROS IO)).", 65535)
 
 
 
@@ -526,6 +546,40 @@ do
 	-- protocol fields: MIKADO_ROBOT_MODEL_INFO
 	f.mikrmi_action_id = ProtoField.int32("simplemessage.mikrmi.action_id", "Action ID", base.DEC, nil       , nil                          , "Action ID")
 	f.mikrmi_software_version = ProtoField.float("simplemessage.mikrmi.software_version", "Software Version", "Software Version")
+
+	-- protocol fields: MIKADO_ROBOT_STATUS
+	f.mik_rs_mode        = ProtoField.int32("simplemessage.rs.mode"            , "Mode           " , base.DEC, status_robotmode_str, nil, "Mode the controller is currently in")
+	f.mik_rs_estop       = ProtoField.int32("simplemessage.rs.e_stopped"       , "E-Stopped      " , base.DEC, status_tristate_str , nil, "Status of the e-stop on the controller")
+	f.mik_rs_drv_pwd     = ProtoField.int32("simplemessage.rs.drives_powered"  , "Drives Powered " , base.DEC, status_tristate_str , nil, "Status of servo power")
+	f.mik_rs_motpos      = ProtoField.int32("simplemessage.rs.motion_possible" , "Motion Possible" , base.DEC, status_tristate_str , nil, "Controller is ok to receive motion commands")
+	f.mik_rs_inmot       = ProtoField.int32("simplemessage.rs.in_motion"       , "In Motion      " , base.DEC, status_tristate_str , nil, "Robot is currently executing a command")
+	f.mik_rs_inerr       = ProtoField.int32("simplemessage.rs.in_error"        , "In Error       " , base.DEC, status_tristate_str , nil, "Controller in error mode")
+	f.mik_rs_errcode     = ProtoField.int32("simplemessage.rs.error_code"      , "Error Code     " , base.DEC, nil                 , nil, "If not zero: error code (controller specific)")
+
+	-- protocol fields: MIKADO_SIMPLE_ACTION_REPLY
+	f.mik_sar_action_id = ProtoField.int32("simplemessage.miksar.action_id", "Action ID", base.DEC, nil       , nil                          , "Action ID")
+	f.mik_sar_action_status = ProtoField.int32("simplemessage.miksar.action_status", "Action Status", base.DEC, nil       , nil              , "Action Status")
+
+	-- protocol fields: MIKADO_STATUS
+	f.mik_ms_state        = ProtoField.int32("simplemessage.mikms.state"            , "State           " , base.DEC, status_tristate_str, nil, "Mikado Status")
+	f.mik_ms_camera_state      = ProtoField.int32("simplemessage.mikms.camera_state"       , "Camera state     " , base.DEC, status_tristate_str , nil, "Camera Status")
+	f.mik_ms_comm_state    = ProtoField.int32("simplemessage.mikms.comm_state"  , "Communication state " , base.DEC, status_tristate_str , nil, "Communication Status")
+	f.mik_ms_robot_state      = ProtoField.int32("simplemessage.mikms.robot_state" , "Robot state" , base.DEC, status_tristate_str , nil, "Robot Status")
+	f.mik_ms_run_state       = ProtoField.int32("simplemessage.mikms.run_state"       , "Running      " , base.DEC, status_tristate_str , nil, "Running Status")
+
+	-- protocol fields: MIKADO_CONNECTION_INFO
+	f.mik_ci_nat     = ProtoField.int32("simplemessage.mikci.nat"    , "Number Axes Trajectory          " , base.DEC, nil, nil, "Number Axes Trajectory")
+	f.mik_ci_nas     = ProtoField.int32("simplemessage.mikci.nas"    , "Number Axes State               " , base.DEC, nil , nil, "Number Axes State")
+	f.mik_ci_neat    = ProtoField.int32("simplemessage.mikci.neat"   , "Number External Axes Trajectory " , base.DEC, nil , nil, "Number External Axes Trajectory")
+	f.mik_ci_neas    = ProtoField.int32("simplemessage.mikci.neas"   , "Number External Axes State      " , base.DEC, nil , nil, "Number External Axes State")
+	f.mik_ci_is_tr   = ProtoField.int32("simplemessage.mikms.is_tr"  , "Is traj in radian               " , base.DEC, true_false_str , nil, "Is traj in radian")
+	f.mik_ci_is_sr   = ProtoField.int32("simplemessage.mikms.is_sr"  , "Is state in radian              " , base.DEC, true_false_str , nil, "Is state in radian")
+	f.mik_ci_is_tv   = ProtoField.int32("simplemessage.mikms.is_tv"  , "Is traj velocity                " , base.DEC, true_false_str , nil, "Is traj velocity")
+	f.mik_ci_is_td   = ProtoField.int32("simplemessage.mikms.is_td"  , "Is traj duration                " , base.DEC, true_false_str , nil, "Is traj duration")
+	f.mik_ci_is_tim  = ProtoField.int32("simplemessage.mikms.is_tim" , "Is traj is moving               " , base.DEC, true_false_str , nil, "Is traj is moving")
+
+	-- protocol fields: MIKADO_CONNECTION_INFO
+	f.mik_dj_is_rob_moving  = ProtoField.int32("simplemessage.mikdj.is_robot_mocing" , "Is robot moving               " , base.DEC, true_false_str , nil, "Is robot moving")
 
 
 	--
@@ -1428,27 +1482,6 @@ do
 			seq_field:set_text(_F("Sequence Number: %s (%d)", str_or_none(special_seq_nr_str, seq_nr), seq_nr))
 		end
 
-		-- valid_fields
-		local valid_fields = pref_uint(buf, offset_, 4)
-		local vf_lo = pref_tree_add(body_tree, f.jtptf_vf, buf, offset_, 4)
-		-- bitfield
-		pref_tree_add(vf_lo, f.mikjtptf_vf_time,  buf, offset_, 4)
-		pref_tree_add(vf_lo, f.mikjtptf_vf_mt,  buf, offset_, 4)
-		pref_tree_add(vf_lo, f.mikjtptf_vf_tp,  buf, offset_, 4)
-		pref_tree_add(vf_lo, f.mikjtptf_vf_lpotp,  buf, offset_, 4)
-		pref_tree_add(vf_lo, f.mikjtptf_vf_pos,   buf, offset_, 4)
-		pref_tree_add(vf_lo, f.mikjtptf_vf_vel,   buf, offset_, 4)
-		offset_ = offset_ + 4
-
-		-- append high bit flags to bitfield parent item
-		vf_lo:append_text(_F(" (%s)", stringify_flagbits(valid_fields, mik_valid_field_type_str)))
-
-		-- time
-		if (bit.band(VALID_FIELD_TYPE_TIME, valid_fields) > 0) or (config.display_invalid_fields) then
-			pref_tree_add(body_tree, f.jtptf_time, buf, offset_, 4)
-		end
-		offset_ = offset_ + 4
-
 		-- motion_type
 		pref_tree_add(body_tree, f.mikjtptf_motion_type, buf, offset_, 4)
 		offset_ = offset_ + 4
@@ -1462,23 +1495,10 @@ do
 		offset_ = offset_ + 4
 
 		-- positions
-		if (bit.band(VALID_FIELD_TYPE_POSITION, valid_fields) > 0) or (config.display_invalid_fields) then
-			offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, 10,
-				"Positions", "J%d")
-		else
-			-- TODO: remove hard-coded float and array size
-			offset_ = offset_ + (10 * 4)
-		end
+		offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, 10, "Positions", "J%d")
 
 		-- velocities
-		if (bit.band(VALID_FIELD_TYPE_VELOCITY, valid_fields) > 0) or (config.display_invalid_fields) then
-			offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, 10,
-				"Velocities", "J%d")
-		else
-			-- TODO: remove hard-coded float and array size
-			offset_ = offset_ + (10 * 4)
-		end
-
+		offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, 10, "Velocities", "J%d")
 		-- nr of bytes we consumed
 		local tlen = offset_ - body_offset
 		body_tree:set_len(tlen)
@@ -1496,10 +1516,6 @@ do
 		local body_tree = tree
 		local body_offset = offset_
 
-		-- robot id
-		pref_tree_add(body_tree, f.jtptf_robotid, buf, offset_, 4)
-		offset_ = offset_ + 4
-
 		-- sequence number
 		local seq_nr = pref_int(buf, offset_, 4)
 		local seq_field = pref_tree_add(body_tree, f.jtptf_seq_nr, buf, offset_, 4)
@@ -1507,27 +1523,6 @@ do
 		if (seq_nr < 0) then
 			seq_field:set_text(_F("Sequence Number: %s (%d)", str_or_none(special_seq_nr_str, seq_nr), seq_nr))
 		end
-
-		-- valid_fields
-		local valid_fields = pref_uint(buf, offset_, 4)
-		local vf_lo = pref_tree_add(body_tree, f.jtptf_vf, buf, offset_, 4)
-		-- bitfield
-		pref_tree_add(vf_lo, f.mikjtptf_vf_time,  buf, offset_, 4)
-		pref_tree_add(vf_lo, f.mikjtptf_vf_mt,  buf, offset_, 4)
-		pref_tree_add(vf_lo, f.mikjtptf_vf_tp,  buf, offset_, 4)
-		pref_tree_add(vf_lo, f.mikjtptf_vf_lpotp,  buf, offset_, 4)
-		pref_tree_add(vf_lo, f.mikjtptf_vf_pos,   buf, offset_, 4)
-		pref_tree_add(vf_lo, f.mikjtptf_vf_vel,   buf, offset_, 4)
-		offset_ = offset_ + 4
-
-		-- append high bit flags to bitfield parent item
-		vf_lo:append_text(_F(" (%s)", stringify_flagbits(valid_fields, mik_valid_field_type_str)))
-
-		-- time
-		if (bit.band(VALID_FIELD_TYPE_TIME, valid_fields) > 0) or (config.display_invalid_fields) then
-			pref_tree_add(body_tree, f.jtptf_time, buf, offset_, 4)
-		end
-		offset_ = offset_ + 4
 
 		-- motion_type
 		pref_tree_add(body_tree, f.mikjtptf_motion_type, buf, offset_, 4)
@@ -1542,22 +1537,10 @@ do
 		offset_ = offset_ + 4
 
 		-- positions
-		if (bit.band(VALID_FIELD_TYPE_POSITION, valid_fields) > 0) or (config.display_invalid_fields) then
-			offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, 10,
-				"Positions", "J%d")
-		else
-			-- TODO: remove hard-coded float and array size
-			offset_ = offset_ + (10 * 4)
-		end
+		offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, 10, "Positions", "J%d")
 
 		-- velocities
-		if (bit.band(VALID_FIELD_TYPE_VELOCITY, valid_fields) > 0) or (config.display_invalid_fields) then
-			offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, 10,
-				"Velocities", "J%d")
-		else
-			-- TODO: remove hard-coded float and array size
-			offset_ = offset_ + (10 * 4)
-		end
+		offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, 10, "Velocities", "J%d")
 
 		-- nr of bytes we consumed
 		local tlen = offset_ - body_offset
@@ -1712,6 +1695,434 @@ do
 	end
 
 
+	--
+	-- MIKADO_ROBOT_STATUS
+	--
+	local function disf_mikado_robot_status(buf, pkt, tree, offset)
+		--
+		local offset_ = offset
+		local lt = tree
+
+		-- header
+		offset_ = offset_ + disf_header(buf, pkt, tree, offset_)
+
+		-- body
+		local body_tree = lt:add(buf(offset_, 0), "Body")
+		local body_offset = offset_
+
+		-- drives powered
+		pref_tree_add(body_tree, f.rs_drv_pwd, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- e-stopped
+		pref_tree_add(body_tree, f.rs_estop, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- error code
+		pref_tree_add(body_tree, f.rs_errcode, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- in error
+		pref_tree_add(body_tree, f.rs_inerr, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- in motion
+		pref_tree_add(body_tree, f.rs_inmot, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- mode
+		pref_tree_add(body_tree, f.rs_mode, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- motion possible
+		pref_tree_add(body_tree, f.rs_motpos, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, 10, "Joint States", "J%d")
+
+
+
+		-- nr of bytes we consumed
+		local tlen = offset_ - body_offset
+		body_tree:set_len(tlen)
+		return (tlen)
+	end
+
+
+	--
+	-- MIKADO_STATUS
+	--
+	local function disf_mikado_status(buf, pkt, tree, offset)
+		--
+		local offset_ = offset
+		local lt = tree
+
+		-- header
+		offset_ = offset_ + disf_header(buf, pkt, tree, offset_)
+
+		-- body
+		local body_tree = lt:add(buf(offset_, 0), "Body")
+		local body_offset = offset_
+
+		
+		-- mik_state
+		pref_tree_add(body_tree, f.mik_ms_state, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- camera_state
+		pref_tree_add(body_tree, f.mik_ms_camera_state, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- comm_state
+		pref_tree_add(body_tree, f.mik_ms_comm_state, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- robot_state
+		pref_tree_add(body_tree, f.mik_ms_robot_state, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- running state
+		pref_tree_add(body_tree, f.mik_ms_run_state, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+
+		-- nr of bytes we consumed
+		local tlen = offset_ - body_offset
+		body_tree:set_len(tlen)
+		return (tlen)
+	end
+
+
+	--
+	-- MIKADO_SIMPLE_ACTION_REPLY
+	--
+	local function disf_mikado_simple_action_reply(buf, pkt, tree, offset)
+		--
+		local offset_ = offset
+		local lt = tree
+
+		-- header
+		offset_ = offset_ + disf_header(buf, pkt, tree, offset_)
+
+		-- body
+		local body_tree = lt:add(buf(offset_, 0), "Body")
+		local body_offset = offset_
+
+		-- action id
+		pref_tree_add(body_tree, f.mik_sar_action_id, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- action_status
+		pref_tree_add(body_tree, f.mik_sar_action_status, buf, offset_, 4)
+		offset_ = offset_ + 4
+		
+		-- Additional int replies
+		offset_ = offset_ + disf_int_array(buf, pkt, body_tree, offset_, 10, "Additional Int Replies", "I")
+
+		-- error string
+		local remaining_len = buf:len() - offset_
+		if remaining_len > 0 then
+			local char_buf = buf(offset_, remaining_len)
+			local str = ""
+			for i = 0, remaining_len - 1 do
+				local byte_val = char_buf(i, 1):uint()
+				local c = string.char(byte_val)
+				if byte_val < 32 or byte_val > 126 then
+					c = ""
+				end
+				str = str .. c
+			end
+
+			body_tree:add(char_buf, "Error String: " .. str)
+
+			offset_ = offset_ + remaining_len
+		end
+
+		-- nr of bytes we consumed
+		local tlen = offset_ - body_offset
+		body_tree:set_len(tlen)
+		return (tlen)
+	end
+
+	--
+	-- MIKADO_STATUS_ACTION_REPLY
+	--
+	local function disf_mikado_status_action_reply(buf, pkt, tree, offset)
+		--
+		local offset_ = offset
+		local lt = tree
+
+		-- header
+		offset_ = offset_ + disf_header(buf, pkt, tree, offset_)
+
+		-- body
+		local body_tree = lt:add(buf(offset_, 0), "Body")
+		local body_offset = offset_
+
+		-- action id
+		pref_tree_add(body_tree, f.mik_sar_action_id, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- action_status
+		pref_tree_add(body_tree, f.mik_sar_action_status, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- mik_state
+		pref_tree_add(body_tree, f.mik_ms_state, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- camera_state
+		pref_tree_add(body_tree, f.mik_ms_camera_state, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- comm_state
+		pref_tree_add(body_tree, f.mik_ms_comm_state, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- robot_state
+		pref_tree_add(body_tree, f.mik_ms_robot_state, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- running state
+		pref_tree_add(body_tree, f.mik_ms_run_state, buf, offset_, 4)
+		offset_ = offset_ + 4
+		
+		
+		-- error string
+		local remaining_len = buf:len() - offset_
+		if remaining_len > 0 then
+			local char_buf = buf(offset_, remaining_len)
+			local str = ""
+			for i = 0, remaining_len - 1 do
+				local byte_val = char_buf(i, 1):uint()
+				local c = string.char(byte_val)
+				if byte_val < 32 or byte_val > 126 then
+					c = ""
+				end
+				str = str .. c
+			end
+
+			body_tree:add(char_buf, "Error String: " .. str)
+
+			offset_ = offset_ + remaining_len
+		end
+
+		-- nr of bytes we consumed
+		local tlen = offset_ - body_offset
+		body_tree:set_len(tlen)
+		return (tlen)
+	end
+
+	--
+	-- MIKADO_CONNECTION_INFO
+	--
+	local function disf_mikado_connection_info(buf, pkt, tree, offset)
+		--
+		local offset_ = offset
+		local lt = tree
+
+		-- header
+		offset_ = offset_ + disf_header(buf, pkt, tree, offset_)
+
+		-- body
+		local body_tree = lt:add(buf(offset_, 0), "Body")
+		local body_offset = offset_
+
+		-- number traj axes
+		pref_tree_add(body_tree, f.mik_ci_nat, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- number state axes
+		pref_tree_add(body_tree, f.mik_ci_nas, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- number traj external axes
+		pref_tree_add(body_tree, f.mik_ci_neat, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- number state external axes
+		pref_tree_add(body_tree, f.mik_ci_neas, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- is traj in radian
+		pref_tree_add(body_tree, f.mik_ci_is_tr, buf, offset_, 1)
+		offset_ = offset_ + 1
+
+		-- is state in radian
+		pref_tree_add(body_tree, f.mik_ci_is_sr, buf, offset_, 1)
+		offset_ = offset_ + 1
+
+		-- is traj velocity
+		pref_tree_add(body_tree, f.mik_ci_is_tv, buf, offset_, 1)
+		offset_ = offset_ + 1
+
+		-- is traj duration
+		pref_tree_add(body_tree, f.mik_ci_is_td, buf, offset_, 1)
+		offset_ = offset_ + 1
+
+		-- is traj is moving
+		pref_tree_add(body_tree, f.mik_ci_is_tim, buf, offset_, 1)
+		offset_ = offset_ + 1
+		
+
+		-- nr of bytes we consumed
+		local tlen = offset_ - body_offset
+		body_tree:set_len(tlen)
+		return (tlen)
+	end
+
+	--
+	-- MIKADO_POSE_ACTION_REPLY
+	--
+	local function disf_mikado_pose_action_reply(buf, pkt, tree, offset)
+		--
+		local offset_ = offset
+		local lt = tree
+
+		-- header
+		offset_ = offset_ + disf_header(buf, pkt, tree, offset_)
+
+		-- body
+		local body_tree = lt:add(buf(offset_, 0), "Body")
+		local body_offset = offset_
+
+		-- action id
+		pref_tree_add(body_tree, f.mik_sar_action_id, buf, offset_, 4)
+		offset_ = offset_ + 4
+
+		-- action_status
+		pref_tree_add(body_tree, f.mik_sar_action_status, buf, offset_, 4)
+		offset_ = offset_ + 4
+		
+		-- Pose reply
+		offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, 10, "Pose values", "J%d")
+
+		-- error string
+		local remaining_len = buf:len() - offset_
+		if remaining_len > 0 then
+			local char_buf = buf(offset_, remaining_len)
+			local str = ""
+			for i = 0, remaining_len - 1 do
+				local byte_val = char_buf(i, 1):uint()
+				local c = string.char(byte_val)
+				if byte_val < 32 or byte_val > 126 then
+					c = ""
+				end
+				str = str .. c
+			end
+
+			body_tree:add(char_buf, "Error String: " .. str)
+
+			offset_ = offset_ + remaining_len
+		end
+
+		-- nr of bytes we consumed
+		local tlen = offset_ - body_offset
+		body_tree:set_len(tlen)
+		return (tlen)
+	end
+
+
+	--
+	-- MIKADO_DYNAMIC_JOINTS
+	--
+	local function disf_mikado_dynamic_joints(buf, pkt, tree, offset)
+		--
+		local offset_ = offset
+		local lt = tree
+
+		-- header
+		offset_ = offset_ + disf_header(buf, pkt, tree, offset_)
+
+		-- body
+		local body_tree = lt:add(buf(offset_, 0), "Body")
+		local body_offset = offset_
+
+		local eos_bytes = 4
+
+		local remaining = buf:len() - offset_ - eos_bytes
+		local num_jts = math.floor(remaining / 4)
+		local leftover  = remaining % 4
+
+		-- joints
+		offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, num_jts, "Pose values", "J%d")
+
+		-- is robot moving
+		if leftover > 0 then
+			pref_tree_add(body_tree, f.mik_dj_is_rob_moving, buf, offset_, 1)
+			offset_ = offset_ + 1
+		end
+
+		
+
+		-- nr of bytes we consumed
+		local tlen = offset_ - body_offset
+		body_tree:set_len(tlen)
+		return (tlen)
+	end
+
+
+	--
+	-- MIKADO_DYNAMIC_JOINTS_TRAJ_PT
+	--
+	local function disf_mikado_dynamic_joints_traj_pt(buf, pkt, tree, offset)
+		--
+		local offset_ = offset
+		local lt = tree
+
+		-- header
+		offset_ = offset_ + disf_header(buf, pkt, tree, offset_)
+
+		-- body
+		local body_tree = lt:add(buf(offset_, 0), "Body")
+		local body_offset = offset_
+
+		-- sequence number
+		local seq_nr = pref_int(buf, offset_, 4)
+		local seq_field = pref_tree_add(body_tree, f.jtpt_seq_nr, buf, offset_, 4)
+		offset_ = offset_ + 4
+		if (seq_nr < 0) then
+			seq_field:set_text(_F("Sequence Number: %s (%d)", str_or_none(special_seq_nr_str, seq_nr), seq_nr))
+		end
+		
+		-- we have no way of knowing what the next bytes actually mean as duration + velocity are optional and the number of joints can differ.
+		-- client and server agreed on the format beforehand but we dont know about it here
+		local eos_bytes = 4
+		local remaining = buf:len() - offset_ - eos_bytes
+		local num_reals = math.floor(remaining / 4)
+
+		-- duration
+		if(num_reals > 6) then
+			pref_tree_add(body_tree, f.jtpt_dur, buf, offset_, 4)
+			offset_ = offset_ + 4
+			num_reals = num_reals -1
+		end
+
+		-- velocity
+		if(num_reals > 6) then
+			pref_tree_add(body_tree, f.jtpt_vel, buf, offset_, 4)
+			offset_ = offset_ + 4
+			num_reals = num_reals -1
+		end
+
+		local leftover  = remaining % 4
+
+		-- joints
+		offset_ = offset_ + disf_float_array(buf, pkt, body_tree, offset_, num_reals, "Pose values", "J%d")
+
+		-- is robot moving
+		if leftover > 0 then
+			pref_tree_add(body_tree, f.mik_dj_is_rob_moving, buf, offset_, 1)
+			offset_ = offset_ + 1
+		end
+
+		-- nr of bytes we consumed
+		local tlen = offset_ - body_offset
+		body_tree:set_len(tlen)
+		return (tlen)
+	end
+
+
 
 
 
@@ -1744,11 +2155,18 @@ do
 		[0x11                          ] = disf_moto_joint_feedback_ex,
 
 		[MSG_MOTO_JOINT_FEEDBACK_EX    ] = disf_moto_joint_feedback_ex,
-		[MSG_MIKADO_ACTION_TRIGGER    ] = disf_mikado_action_trigger,
-		--[MSG_MIKADO_STATUS            ] = "Mikado Status",
-		--[MSG_MIKADO_JOINT_TRAJ_PT_FULL] = "Mikado Joint Trajectory Full Point",
-		[MSG_MIKADO_TRAJECTORY        ] = disf_mikado_trajectory,
-		[MSG_MIKADO_ROBOT_MODEL_INFO       ] = disf_mikado_robot_model_info,
+		[MSG_MIKADO_ACTION_TRIGGER    ]  = disf_mikado_action_trigger,
+		[MSG_MIKADO_STATUS            ]  = disf_mikado_status,
+		--[MSG_MIKADO_JOINT_TRAJ_PT_FULL]  = "Mikado Joint Trajectory Full Point",
+		[MSG_MIKADO_TRAJECTORY        ]  = disf_mikado_trajectory,
+		[MSG_MIKADO_ROBOT_MODEL_INFO   ] = disf_mikado_robot_model_info,
+		[MSG_MIKADO_ROBOT_STATUS       ] = disf_mikado_robot_status,
+		[MSG_MIKADO_SIMPLE_ACTION_REPLY] = disf_mikado_simple_action_reply,
+		[MSG_MIKADO_STATUS_ACTION_REPLY] = disf_mikado_status_action_reply,
+		[MSG_MIKADO_POSE_ACTION_REPLY]   = disf_mikado_pose_action_reply,
+		[MSG_MIKADO_CONNECTION_INFO]   = disf_mikado_connection_info,
+		[MSG_MIKADO_DYNAMIC_JOINTS]   = disf_mikado_dynamic_joints,
+		[MSG_MIKADO_DYNAMIC_JOINTS_TRAJ_PT]   = disf_mikado_dynamic_joints_traj_pt
 	}
 
 
